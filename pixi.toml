@@ -1,0 +1,19 @@
+[workspace]
+authors = ["dksasaki <dalton.sasaki@gmail.com>"]
+channels = ["conda-forge"]
+name = "oceannetworks_data"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = ">=3.14.4,<3.15"
+ipython = ">=9.13.0,<10"
+matplotlib = ">=3.10.9,<4"
+scipy = ">=1.17.1,<2"
+cartopy = ">=0.25.0,<0.26"
+pandas = ">=3.0.2,<4"
+
+[pypi-dependencies]
+onc = ">=2.6.0, <3"
