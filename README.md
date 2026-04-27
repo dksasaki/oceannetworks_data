@@ -21,7 +21,7 @@ curl -fsSL https://pixi.sh/install.sh | bash
 ### 2. Clone the repository
 
 ```bash
-git clone <your-repo>
+git clone https://github.com/dksasaki/oceannetworks_data.git
 cd oceannetworks_data
 ```
 
