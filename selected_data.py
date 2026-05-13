@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import pandas as pd
 import cartopy.feature as cfeature
+import os
+
 
 def print_key_tree(d, indent=0):
     for key, value in d.items():
@@ -247,35 +249,66 @@ if __name__ == '__main__':
 
 devices_list = recon_device(onc, code, lat_min, lat_max, lon_min, lon_max)
 
+output_dir = "data"
+os.makedirs(output_dir, exist_ok=True)
 
 bla = {}
-for device in devices_list[2:]:
-    # device = devices_list[0]
+for device in devices_list[8:14]:
 
-    data = onc.getDirectByLocation({i:device[i] for i in device if i in ['deviceCategoryCode',
-                                                                                        'dateFrom',
-                                                                                        'dateTo',
-                                                                                        'locationCode']})
-    bla[device['locationCode']] = {}
-    bla[device['locationCode']]['lon'] = device['lon']
-    bla[device['locationCode']]['lat'] = device['lat']
-    bla[device['locationCode']]['depth'] = device['depth']
-    bla[device['locationCode']]['df'] = {}
-    for i,data0 in enumerate(data['sensorData']):
-        
-        # data0 = data['sensorData']
-        t = data0['data']['sampleTimes']
-        v = data0['data']['values']
+    date_from = device.get("begin")
+    date_to   = device.get("end")
 
-        df = pd.DataFrame(index=t, data=v)
-        df.index = pd.to_datetime(df.index)
-        df = df.dropna()
-        bla[device['locationCode']]['df'][i] = df
-        print(df)
-        print(df.resample('1h').mean())
+    if not date_from or not date_to or pd.isna(date_to):
+        print(f"  {device['locationCode']}: skipping, no time range")
+        continue
+
+    data = onc.getDirectByLocation({
+        "locationCode":       device["locationCode"],
+        "deviceCategoryCode": device["deviceCategoryCode"],
+        "dateFrom":           device.get("begin"),
+        "dateTo":             device.get("end"),
+    })
+
+    lcode = device["locationCode"]
+    bla[lcode] = {
+        "lon":   device["lon"],
+        "lat":   device["lat"],
+        "depth": device["depth"],
+        "df":    {},
+    }
+
+    for data0 in data["sensorData"]:
+        prop  = data0["propertyCode"]
+        t     = data0["data"]["sampleTimes"]
+        v     = data0["data"]["values"]
+
+        df_sensor = pd.DataFrame(index=t, data=v, columns=[prop])
+        df_sensor.index = pd.to_datetime(df_sensor.index)
+        df_sensor = df_sensor.dropna()
+        df_sensor.index = df_sensor.index.tz_localize(None)
+
+        bla[lcode]["df"][prop] = df_sensor
+
+        # build xarray dataset with metadata
+        ds = xr.Dataset(
+            {prop: ("time", df_sensor[prop].values)},
+            coords={"time": df_sensor.index},
+            attrs={
+                "locationCode": lcode,
+                "deviceCategoryCode": device["deviceCategoryCode"],
+                "lat":   device["lat"],
+                "lon":   device["lon"],
+                "depth": device["depth"],
+            }
+        )
+
+        t_start = df_sensor.index[0].strftime("%Y%m%dT%H%M%S")
+        t_end   = df_sensor.index[-1].strftime("%Y%m%dT%H%M%S")
+        fname   = f"{lcode}_{prop}_{t_start}_{t_end}.nc"
+        ds.to_netcdf(
+            os.path.join(output_dir, fname),
+            encoding={"time": {"units": "seconds since 1970-01-01", "dtype": "int32"}}
+        )
+        print(f"saved: {fname}")
 
 
-fig = plt.figure()
-ax = fig.add_subplot(1,1,1)
-for _,b in bla['BACAX']['df'].items():
-    b.plot(ax=ax)
