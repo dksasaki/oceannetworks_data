@@ -5,6 +5,37 @@ import cartopy.crs as ccrs
 import pandas as pd
 import cartopy.feature as cfeature
 import xarray as xr
+import functools
+
+def check_downloaded(output_dir="data"):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(onc, devices_list, *args, **kwargs):
+            missing = []
+            existing = os.listdir(output_dir) if os.path.exists(output_dir) else []
+
+            for device in devices_list:
+                lcode      = device["locationCode"]
+                prop_codes = device["propertyCodes"]
+
+                missing_props = [
+                    prop for prop in prop_codes
+                    if not any(f.startswith(f"{lcode}_{prop}_") for f in existing)
+                ]
+
+                if missing_props:
+                    device_copy = device.copy()
+                    device_copy["propertyCodes"] = missing_props
+                    missing.append(device_copy)
+
+            if not missing:
+                print("all data already downloaded, skipping.")
+                return {}
+
+            print(f"{len(missing)} device(s) with missing properties, downloading...")
+            return func(onc, missing, *args, **kwargs)
+        return wrapper
+    return decorator
 
 
 # ==============================================================================
@@ -183,7 +214,83 @@ def recon_device(onc, device_category, lat_min, lat_max, lon_min, lon_max):
 # ==============================================================================
 # DOWNLOAD
 # ==============================================================================
+# @check_downloaded(output_dir='data')
+# def download_devices(onc, devices_list, output_dir="data"):
+#     """
+#     Download scalar data for a list of devices and save each property as a
+#     separate NetCDF file.
 
+#     File naming convention: {locationCode}_{propertyCode}_{tStart}_{tEnd}.nc
+
+#     Parameters
+#     ----------
+#     onc : ONC
+#         Authenticated ONC client instance.
+#     devices_list : list of dict
+#         Output of recon_device — each dict describes one deployment.
+#     output_dir : str
+#         Directory where NetCDF files are saved. Created if it doesn't exist.
+
+#     Returns
+#     -------
+#     dict
+#         Nested dict: {locationCode: {lon, lat, depth, df: {propertyCode: pd.DataFrame}}}
+#     """
+#     os.makedirs(output_dir, exist_ok=True)
+#     bla = {}
+
+#     for device in devices_list:
+#         date_from = device.get("begin")
+#         date_to   = device.get("end")
+
+#         # skip deployments with missing or NaN time bounds
+#         if not date_from or not date_to or pd.isna(date_to):
+#             print(f"  {device['locationCode']}: skipping, no time range")
+#             continue
+
+#         data = onc.getDirectByLocation({
+#             "locationCode":       device["locationCode"],
+#             "deviceCategoryCode": device["deviceCategoryCode"],
+#             "dateFrom":           date_from,
+#             "dateTo":             date_to,
+#         })
+
+#         lcode = device["locationCode"]
+#         bla[lcode] = {"lon": device["lon"], "lat": device["lat"], "depth": device["depth"], "df": {}}
+
+#         for data0 in data["sensorData"]:
+#             prop = data0["propertyCode"]
+#             t    = data0["data"]["sampleTimes"]
+#             v    = data0["data"]["values"]
+
+#             df_sensor = pd.DataFrame(index=t, data=v, columns=[prop])
+#             df_sensor.index = pd.to_datetime(df_sensor.index)
+#             df_sensor = df_sensor.dropna()
+#             df_sensor.index = df_sensor.index.tz_localize(None)  # strip UTC for NetCDF compatibility
+
+#             bla[lcode]["df"][prop] = df_sensor
+
+#             ds = xr.Dataset(
+#                 {prop: ("time", df_sensor[prop].values)},
+#                 coords={"time": df_sensor.index},
+#                 attrs={
+#                     "locationCode":       lcode,
+#                     "deviceCategoryCode": device["deviceCategoryCode"],
+#                     "lat":                device["lat"],
+#                     "lon":                device["lon"],
+#                     "depth":              device["depth"] if device["depth"] is not None else float("nan"),
+#                 }
+#             )
+
+#             t_start = df_sensor.index[0].strftime("%Y%m%dT%H%M%S")
+#             t_end   = df_sensor.index[-1].strftime("%Y%m%dT%H%M%S")
+#             fname   = f"{lcode}_{prop}_{t_start}_{t_end}.nc"
+#             ds.to_netcdf(os.path.join(output_dir, fname))
+#             print(f"saved: {fname}")
+
+#     return bla
+
+@check_downloaded(output_dir="data")
 def download_devices(onc, devices_list, output_dir="data"):
     """
     Download scalar data for a list of devices and save each property as a
@@ -197,6 +304,8 @@ def download_devices(onc, devices_list, output_dir="data"):
         Authenticated ONC client instance.
     devices_list : list of dict
         Output of recon_device — each dict describes one deployment.
+        The 'propertyCodes' key controls which properties are downloaded;
+        the decorator may narrow this list to only missing properties.
     output_dir : str
         Directory where NetCDF files are saved. Created if it doesn't exist.
 
@@ -209,10 +318,10 @@ def download_devices(onc, devices_list, output_dir="data"):
     bla = {}
 
     for device in devices_list:
-        date_from = device.get("begin")
-        date_to   = device.get("end")
+        date_from  = device.get("begin")
+        date_to    = device.get("end")
+        prop_codes = device.get("propertyCodes", [])
 
-        # skip deployments with missing or NaN time bounds
         if not date_from or not date_to or pd.isna(date_to):
             print(f"  {device['locationCode']}: skipping, no time range")
             continue
@@ -224,18 +333,28 @@ def download_devices(onc, devices_list, output_dir="data"):
             "dateTo":             date_to,
         })
 
+        if not data.get("sensorData"):
+            print(f"  {lcode}: no sensorData returned, skipping")
+            continue
+        
         lcode = device["locationCode"]
         bla[lcode] = {"lon": device["lon"], "lat": device["lat"], "depth": device["depth"], "df": {}}
 
         for data0 in data["sensorData"]:
             prop = data0["propertyCode"]
-            t    = data0["data"]["sampleTimes"]
-            v    = data0["data"]["values"]
+
+            # skip properties not in the (possibly narrowed) list
+            if prop not in prop_codes:
+                print(f"  {lcode} | {prop}: already downloaded, skipping")
+                continue
+
+            t = data0["data"]["sampleTimes"]
+            v = data0["data"]["values"]
 
             df_sensor = pd.DataFrame(index=t, data=v, columns=[prop])
             df_sensor.index = pd.to_datetime(df_sensor.index)
             df_sensor = df_sensor.dropna()
-            df_sensor.index = df_sensor.index.tz_localize(None)  # strip UTC for NetCDF compatibility
+            df_sensor.index = df_sensor.index.tz_localize(None)
 
             bla[lcode]["df"][prop] = df_sensor
 
@@ -247,18 +366,17 @@ def download_devices(onc, devices_list, output_dir="data"):
                     "deviceCategoryCode": device["deviceCategoryCode"],
                     "lat":                device["lat"],
                     "lon":                device["lon"],
-                    "depth":              device["depth"],
+                    "depth":              device["depth"] if device["depth"] is not None else float("nan"),
                 }
             )
 
             t_start = df_sensor.index[0].strftime("%Y%m%dT%H%M%S")
             t_end   = df_sensor.index[-1].strftime("%Y%m%dT%H%M%S")
             fname   = f"{lcode}_{prop}_{t_start}_{t_end}.nc"
-            ds.to_netcdf(os.path.join(output_dir, fname))
+            ds.to_netcdf(os.path.join(output_dir, fname), engine="netcdf4")
             print(f"saved: {fname}")
 
     return bla
-
 
 # ==============================================================================
 # MAIN
@@ -300,4 +418,4 @@ if __name__ == '__main__':
     devices_list = recon_device(onc, code, lat_min, lat_max, lon_min, lon_max)
 
     # -- 5) download -- #
-    bla = download_devices(onc, devices_list, output_dir="data")
+    bla = download_devices(onc, devices_list[43:], output_dir="data")
