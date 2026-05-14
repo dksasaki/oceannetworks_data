@@ -50,12 +50,6 @@ Open a terminal and run:
 curl -fsSL https://pixi.sh/install.sh | bash
 ```
 
-**Windows (PowerShell):**
-
-```powershell
-iwr -useb https://pixi.sh/install.ps1 | iex
-```
-
 To verify pixi is installed:
 
 ```bash
@@ -114,11 +108,6 @@ Create a file called `.login` at the root of the project folder and paste your t
 echo "your-token-here" > .login
 ```
 
-**Windows (PowerShell):**
-
-```powershell
-"your-token-here" | Out-File -FilePath .login -Encoding ascii
-```
 
 Or simply open a text editor, paste your token, and save the file as `.login` in the project folder.
 
