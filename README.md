@@ -92,20 +92,76 @@ Decorator for `download_devices`. Before downloading, checks `output_dir` for fi
 
 ## Workflow
 
+### Step 1 — Connect and load all deployments
+
 ```python
 from onc_tools import get_onc, recon_device, download_devices
+import pandas as pd
 
 onc = get_onc()
+deployments = onc.getDeployments({})
+df = pd.DataFrame(deployments)
+```
 
+### Step 2 — Define bounding box and filter deployments
+
+```python
 lat_min, lat_max = 48.09945106423486, 48.57934033063693
 lon_min, lon_max = -126.33077903027713, -125.5997327646366
 
-# discovery
-devices_list = recon_device(onc, "OXYSENSOR", lat_min, lat_max, lon_min, lon_max)
+mask = (
+    df["lat"].notna() & df["lon"].notna() &
+    df["lat"].between(lat_min, lat_max) &
+    df["lon"].between(lon_min, lon_max)
+)
+df = df[mask]
+```
 
-# download (skips already downloaded properties)
+### Step 3 — Select a device category code
+
+Enumerate what is available in the bounding box:
+
+```python
+print(set(df["deviceCategoryCode"]))
+```
+
+Pick a code from the output (see [Device Category Codes](#device-category-codes) for reference) and check how many deployments exist:
+
+```python
+code = "OXYSENSOR"
+deployments_bydeviceCategoryCode(onc, code, df, lat_min, lat_max, lon_min, lon_max)
+```
+
+### Step 4 — Reconnaissance
+
+Inspect deployment details, available properties, and time bounds for the selected code:
+
+```python
+devices_list = recon_device(onc, code, lat_min, lat_max, lon_min, lon_max)
+```
+
+Example output:
+
+```
+=== OXYSENSOR | 3 deployments ===
+
+-- BACAX | lat=48.3118, lon=-126.0652, depth=860.5 --
+   begin=2016-05-14T03:38:34.000Z, end=2017-06-20T19:54:58.000Z
+   download params:
+     locationCode       = 'BACAX'
+     deviceCategoryCode = 'OXYSENSOR'
+     propertyCode       = ['oxygen', 'seawatertemperature']
+     dateFrom           = '2016-05-14T03:38:34.000Z'
+     dateTo             = '2017-06-20T19:54:58.000Z'
+```
+
+### Step 5 — Download
+
+```python
 bla = download_devices(onc, devices_list, output_dir="data")
 ```
+
+Each property is saved as an independent NetCDF4 file. Already-downloaded properties are skipped automatically.
 
 ---
 
@@ -126,18 +182,6 @@ Relevant codes for bottom water column and sediment measurements:
 | `CORK` | Sub-seafloor borehole pressure and temperature |
 | `TURBIDITY` | Turbidity |
 | `FLUOROMETER` | Chlorophyll, CDOM |
-
-Enumerate codes available in your bbox:
-
-```python
-deployments = onc.getDeployments({})
-df = pd.DataFrame(deployments)
-mask = (
-    df["lat"].between(lat_min, lat_max) &
-    df["lon"].between(lon_min, lon_max)
-)
-print(set(df[mask]["deviceCategoryCode"]))
-```
 
 ---
 
