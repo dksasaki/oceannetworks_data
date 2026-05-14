@@ -19,10 +19,7 @@ This project provides a set of Python scripts to:
 
 Before starting, you need to install the following tools on your computer:
 
-| Tool | Purpose | Download |
-|------|---------|----------|
-| [Git](https://git-scm.com/downloads) | Download the project files | https://git-scm.com/downloads |
-| [pixi](https://pixi.sh) | Manage the Python environment and dependencies | https://pixi.sh |
+[pixi](https://pixi.prefix.dev/latest/): Manage the Python environment and dependencies 
 
 You do not need to install Python separately — pixi handles that for you.
 
@@ -32,7 +29,7 @@ You do not need to install Python separately — pixi handles that for you.
 
 ### 1. Install Git
 
-Download and install Git from https://git-scm.com/downloads. Follow the installer for your operating system (Windows, macOS, or Linux).
+Download and install Git from https://git-scm.com/downloads (if not available in your system). Follow the installer for your operating system (Windows, macOS, or Linux). 
 
 To verify Git is installed, open a terminal and run:
 
@@ -58,7 +55,6 @@ pixi --version
 
 > **What is a terminal?**
 > - On **macOS**: open Spotlight (Cmd+Space) and type "Terminal"
-> - On **Windows**: search for "PowerShell" in the Start menu
 > - On **Linux**: look for "Terminal" in your applications
 
 ### 3. Clone the repository
@@ -121,34 +117,23 @@ Or simply open a text editor, paste your token, and save the file as `.login` in
 
 ## Running the Scripts
 
-### Launch an interactive session
 
-The recommended way to explore the data interactively is via IPython:
+### Main script
+
+The workflow is implemented in `selected_data.py`. Open it and follow the steps defined under `if __name__ == '__main__'`:
+
+1. Connect to ONC and load all deployments
+2. Define a bounding box to filter instruments by location
+3. Select a `deviceCategoryCode` from the available codes in your area
+4. Run `recon_device()` to inspect available properties and time ranges
+5. Run `download_devices()` to download and save data as NetCDF files
+
+Edit the bounding box coordinates and `code` variable at the top of the `__main__` block to match your area of interest, then run:
 
 ```bash
-pixi run ipython
+pixi run python selected_data.py
 ```
 
-This opens an interactive Python prompt where you can run commands one at a time.
-
-### Basic example
-
-```python
-from onc_tools import get_onc, recon_device, download_devices
-
-# connect to ONC
-onc = get_onc()
-
-# define a bounding box (lat_min, lat_max, lon_min, lon_max)
-lat_min, lat_max = 48.09945106423486, 48.57934033063693
-lon_min, lon_max = -126.33077903027713, -125.5997327646366
-
-# discover oxygen sensor deployments in the bounding box
-devices_list = recon_device(onc, "OXYSENSOR", lat_min, lat_max, lon_min, lon_max)
-
-# download and save data as NetCDF files in the data/ folder
-bla = download_devices(onc, devices_list, output_dir="data")
-```
 
 ### What is a bounding box?
 
@@ -207,27 +192,6 @@ Some common codes relevant for bottom water column and sediment measurements:
 | `TURBIDITY` | Turbidity |
 | `FLUOROMETER` | Chlorophyll, CDOM |
 
-To see which codes are available in your bounding box:
-
-```python
-import pandas as pd
-from onc_tools import get_onc
-
-onc = get_onc()
-deployments = onc.getDeployments({})
-df = pd.DataFrame(deployments)
-
-lat_min, lat_max = 48.09945106423486, 48.57934033063693
-lon_min, lon_max = -126.33077903027713, -125.5997327646366
-
-mask = (
-    df["lat"].notna() & df["lon"].notna() &
-    df["lat"].between(lat_min, lat_max) &
-    df["lon"].between(lon_min, lon_max)
-)
-
-print(set(df[mask]["deviceCategoryCode"]))
-```
 
 ---
 
@@ -265,18 +229,7 @@ To count how many files have been downloaded:
 ls data/ | wc -l
 ```
 
----
 
-## Project Structure
-
-```
-oceannetworks_data/
-├── onc_tools.py       # main functions for discovery and download
-├── pixi.toml          # environment definition (dependencies)
-├── .login             # your ONC token (not shared, not uploaded)
-├── data/              # downloaded NetCDF files (created automatically)
-└── README.md          # this file
-```
 
 ---
 

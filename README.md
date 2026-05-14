@@ -43,64 +43,59 @@ token_file = os.path.join(os.environ["PIXI_PROJECT_ROOT"], ".login")
 
 ---
 
-## API
+## Understanding the selection and dowload procedure
 
-### `get_onc()`
-
-Instantiates and returns an authenticated `ONC` client.
+Use either `scripts/select_data.py` or `scripts/selec_data.ipynb` datasets. A few functions are defined:
 
 ---
 
-### `recon_device(onc, device_category, lat_min, lat_max, lon_min, lon_max)`
+- `get_onc()`: Instantiates and returns an authenticated `ONC` client.
 
-Queries deployments for a given `deviceCategoryCode` within a bounding box. For each deployment, retrieves location metadata, available properties, and deployment time bounds. Prints download-ready parameters and returns a list of deployment dicts.
-
-**Returns:** `list[dict]` with keys:
-
-| Key | Description |
-|-----|-------------|
-| `locationCode` | ONC location identifier |
-| `deviceCategoryCode` | Device category |
-| `lat`, `lon` | Deployment coordinates |
-| `depth` | Water depth (m) |
-| `begin`, `end` | Deployment time bounds (ISO8601 UTC) |
-| `propertyCodes` | List of available property codes |
+---
+- `recon_device(onc, device_category, lat_min, lat_max, lon_min, lon_max)`: queries deployments for a given `deviceCategoryCode` within a bounding box. For each deployment, retrieves location metadata, available properties, and deployment time bounds. Prints download-ready parameters and returns a list of deployment dicts.
 
 ---
 
-### `download_devices(onc, devices_list, output_dir="data")`
+- `download_devices(onc, devices_list, output_dir="data")`: downloads scalar time-series for each deployment in `devices_list` via `getDirectByLocation`. Each property is saved as an independent NetCDF4 file. It is decorated with `@check_downloaded` — skips properties for which a matching file already exists in `output_dir`, enabling incremental downloads.
 
-Downloads scalar time-series for each deployment in `devices_list` via `getDirectByLocation`. Each property is saved as an independent NetCDF4 file.
+    The outputs are saved following the **file naming:**
 
-Decorated with `@check_downloaded` — skips properties for which a matching file already exists in `output_dir`, enabling incremental downloads.
+    ```
+    {locationCode}_{propertyCode}_{tStart}_{tEnd}.nc
+    ```
 
-**File naming:**
-
-```
-{locationCode}_{propertyCode}_{tStart}_{tEnd}.nc
-```
-
-**NetCDF global attributes:** `locationCode`, `deviceCategoryCode`, `lat`, `lon`, `depth`
+    **NetCDF global attributes:** `locationCode`, `deviceCategoryCode`, `lat`, `lon`, `depth`
 
 ---
 
-### `check_downloaded(output_dir)`
+- `check_downloaded(output_dir)`: decorator for `download_devices`. Before downloading, checks `output_dir` for files matching `{locationCode}_{propertyCode}_*`. Narrows `propertyCodes` in each deployment dict to only missing properties. Skips the download entirely if all properties are present.
 
-Decorator for `download_devices`. Before downloading, checks `output_dir` for files matching `{locationCode}_{propertyCode}_*`. Narrows `propertyCodes` in each deployment dict to only missing properties. Skips the download entirely if all properties are present.
 
----
 
 ## Workflow
 
-### Step 1 — Connect and load all deployments
+The workflow is implemented in `select_data.py` under `if __name__ == '__main__'`. Edit the bounding box coordinates and `code` variable to match your area of interest and run:
 
-```python
-from onc_tools import get_onc, recon_device, download_devices
-import pandas as pd
+```bash
+pixi run python select_data.py
+```
 
-onc = get_onc()
-deployments = onc.getDeployments({})
-df = pd.DataFrame(deployments)
+The script follows these steps:
+
+```
+1. get_onc()
+        │
+        ▼
+2. getDeployments()          ← list all instruments in the database
+        │
+        ▼
+3. filter by bounding box    ← narrow down to your area of interest
+        │
+        ▼
+4. recon_device()            ← inspect available properties and time ranges
+        │
+        ▼
+5. download_devices()        ← download and save as NetCDF
 ```
 
 ### Step 2 — Define bounding box and filter deployments
