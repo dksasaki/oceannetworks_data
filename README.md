@@ -98,6 +98,16 @@ The script follows these steps:
 5. download_devices()        ← download and save as NetCDF
 ```
 
+Alternatively use jupyter lab. From bash terminal in oceannetworks_data directory:
+
+```bash
+pixi shell
+jupyter lab
+```
+
+Access `scripts/selected_data.ipynb` to download data.
+
+
 ### Step 2 — Define bounding box and filter deployments
 
 ```python
