@@ -134,6 +134,15 @@ Edit the bounding box coordinates and `code` variable at the top of the `__main_
 pixi run python selected_data.py
 ```
 
+Alternatively use jupyter lab
+
+```
+# from oceannetworks_data directory activate jupyter lab
+pixi shell
+jupyter lab
+```
+
+Access `scripts/selected_data.ipynb` to download data.
 
 ### What is a bounding box?
 
