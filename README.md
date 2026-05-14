@@ -167,7 +167,7 @@ Each property is saved as an independent NetCDF4 file. Already-downloaded proper
 
 ## Device Category Codes
 
-Relevant codes for bottom water column and sediment measurements:
+Example codes for bottom water column or sediment measurements:
 
 | Code | Instrument |
 |------|-----------|
